@@ -1,4 +1,4 @@
-String URL = "https://goo.gl/Fxezzb";
+String URL = "https://goo.gl/pzuDuu";
 if (utils.count("\"Treasure_Find_Game\" : \"treasure\"") == 1) {
 	utils.append("Treasure_Find_Game", "\"treasure\": {
 						\"value\": \"Treasure 02, Search the way\", 
