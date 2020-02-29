@@ -1,10 +1,30 @@
-String URL = "https://goo.gl/pzuDuu";
-if (utils.count("\"Treasure_Find_Game\" : \"treasure\"") == 1) {
-	utils.append("Treasure_Find_Game", "\"treasure\": {
-						\"value\": \"Treasure 02, Search the way\", 
-						\"hint\": \"It seems that the NORTH face is the best way\"}");
-	utils.notify("It seems that the NORTH face is the best way");
-	String name = utils.get("\"Treasure_Find_Game\" : \"player\"");
-	Calendar now = Calendar.getInstance();
-	utils.upload(URL, "utils.notify(\"player "+name+" already got this hint at "+now.get(Calendar.HOUR_OF_DAY)+":"+now.get(Calendar.MINUTE)+"\")");
+void treasureHunt(String status, List<String> clues) {
+	if (dac.read("clues") == null) {
+		// The player has just started the hunt; 
+		// entities are written to the profile
+		int i = 0; 
+		for (String clue : clues) {
+			dac.write("clues/" + i++, clue); 
+		}
+		dac.write("treasures", 0);
+	}
+	String c = dac.read("clues"); 
+	dac.remove("clues/", c);
+	if (status == "playing") {
+	    // Checks no. of treasures already found
+		int treasures = dac.read("treasures");  
+		if (treasures != 4) {
+			dac.write("treasures", treasures++);
+			dac.showToast("The new clue is " + c); 
+		}else { // The player has won the game  	
+			dac.showToast("Congratulations. You Win!");
+			dac.write("treasures", 5);
+			String me = dac.read("Personal/name");
+			String now = dac.read("System/now");
+			dac.remoteWrite("winner/name", me);
+			dac.remoteWrite("winner/time", now);
+			dac.remoteWrite("gameover");
+		}
+	// Somebody else has won the game
+	}else { dac.showToast("You lose!"); } 
 }
