@@ -1,0 +1,190 @@
+import org.json.JSONObject;
+import org.json.JSONArray;
+import java.util.Map;
+import java.util.HashMap;
+
+/**** Header region */
+
+//header:interval=00
+
+
+/**** Functions region *****/
+
+private String getRandomHint(hintsList, userHints) {
+    //check what hints you have, compare with all the hints in hintsList and get one random.
+    //if you already have all, set the game as completed.
+
+    // Prepare a union
+    Set union = new HashSet(Arrays.asList(hintsList));
+    union.addAll(Arrays.asList(userHints));
+    // Prepare an intersection
+    Set intersection = new HashSet(Arrays.asList(hintsList));
+    intersection.retainAll(Arrays.asList(userHints));
+    // Subtract the intersection from the union
+    union.removeAll(intersection);
+
+    int randomIndex = new Random().nextInt(union.size());
+    Iterator iter = union.iterator();
+    for (int i = 0; i < randomIndex; i++) {
+        iter.next();
+    }
+    String elementToReturn = iter.next();
+
+    if(elementToReturn != null){
+        return elementToReturn;
+    }else{
+        return "";
+    }
+}
+
+
+public static String executePost(String targetURL, String urlParameters) {
+    HttpURLConnection connection = null;
+
+    try {
+        //Create connection
+        print("pre create URL");
+        URL url = new URL(targetURL);
+        print("pre open connection");
+        connection = (HttpURLConnection) url.openConnection();
+        print("Post open connection");
+        connection.setRequestMethod("POST");
+        connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+       
+        connection.setConnectTimeout(15000);
+        connection.setRequestProperty("Content-Language", "en-US");
+        
+        connection.setUseCaches(false);
+        connection.setDoOutput(false);
+
+        connection.setRequestProperty("User-Agent", "Mozilla/5.0 ( compatible ) ");
+        connection.setRequestProperty("Accept", "*/*");
+
+        print("Connection setup");
+
+        //Send request
+        DataOutputStream wr = new DataOutputStream(connection.getOutputStream());
+        print("DataOutputStream creado");
+        wr.writeBytes(urlParameters);
+        print("writeBytes");
+        wr.close();
+        print("data output closed");
+        //Get Response  
+        InputStream is = connection.getInputStream();
+        BufferedReader rd = new BufferedReader(new InputStreamReader(is));
+        StringBuilder response = new StringBuilder(); // or StringBuffer if Java version 5+
+        String line;
+        while ((line = rd.readLine()) != null) {
+            response.append(line);
+            response.append('\r');
+        }
+        rd.close();
+        print("Closed, returning response");
+        if (connection != null) {
+            connection.disconnect();
+        }
+        return response.toString();
+    } catch (Exception e) {
+        if (connection != null) {
+            connection.disconnect();
+        }
+        e.printStackTrace();
+        return null;
+    }
+
+}
+
+
+/**** - *****/
+
+/**** Script flow region *****/
+ //debug(); //to activate beanshell debug mode
+
+/** 
+ * Big issue here: https://github.com/beanshell/beanshell/issues/22#issuecomment-331811725 
+ * That said, I'm presuming this isn't supported because BeanShell is apparently based on Java 1.1 grammar,
+ * while 1.5/J2SE 5.0 is when Generics were added, and Collections was added in 1.2.
+ * Can't do Map<String,String>
+*/
+
+/**These parameters are set by the server when downloading the script*/
+Map hintsList = new HashMap();
+/**Label to be replaced by the values*/
+@@hintsListValues@@ 
+
+String beaconName;
+/**Label to be replace by the beacon name*/
+@@beaconName@@
+
+/*Map userHintsList;*/ //Hints come from the mobile device, use interpreter.set() on the android app;
+//List<String> foundTreasures = new ArrayList();
+//String currentTreasure; //treasure just found
+
+//Check if we already found this beacon
+if (myapp.checkIfTreasureAlreadyFound(beaconName)) {
+    myapp.showToast("You have already found this treasure!", myContext);
+} else {
+    //We haven't found this beacon yet, add it to the list and request a hint to the server
+
+    myapp.updateUserTreasures(beaconName);
+
+    String serverURL = "https://treasure-game-uma.herokuapp.com";
+    String scriptURL = serverURL + "/update";
+    String finishURL = serverURL + "/finishGame";
+    String urlParameters = URLEncoder.encode("beaconId", "UTF-8") + "=" + URLEncoder.encode(beaconName, "UTF-8") + "&" + URLEncoder.encode("playerId", "UTF-8") + "=" + URLEncoder.encode(userName, "UTF-8");
+    String response = executePost(scriptURL, urlParameters);
+    print("****** Response *****");
+    print(response);
+    JSONObject jsonResponse = new JSONObject(response);
+    isGameFinished = jsonResponse.getString("gameFinished");
+    winnerName = jsonResponse.getString("winnerName");
+
+
+    //myapp.showToast(jsonResponse.getString("message"), myContext);//shows updated correctly
+
+    if(userHintsList == null){
+        //Avoid accessing atribute of null object
+            userHintsList = new String[0];
+    }
+
+    if (isGameFinished.equals("true")) {
+        //game has finished already
+        if (winnerName.equals(userName)) {
+            //you were the winner
+            myapp.showToast("You have already won the game", myContext);
+        } else {
+            //someone else is the winner
+            myapp.showToast("Sorry, the game was finished, the winner is " + winnerName, myContext);
+        }
+        
+        
+        
+    } else {
+        //Give new hint to user
+        String[] hintsListArray = (String[]) hintsList.keySet().toArray(new String[0]);
+        String newHint = getRandomHint(hintsListArray, userHintsList);
+        String newHintValue = hintsList.get(newHint);
+
+        //Check if user won the game
+        if (hintsList.size() == userHintsList.length + 1) { // +1 because we have to count the hint we just found
+        //The game was just finished by this user
+        String urlParameters = URLEncoder.encode("userName", "UTF-8") + "=" + URLEncoder.encode(userName, "UTF-8");
+        executePost(finishURL, urlParameters);
+        myapp.showToast("You finished the game first, congratulations!", myContext);
+
+        }else{
+        //Game continues
+        //Show number of players that already got this hint
+        String getPlayersURL = serverURL + "/getPlayers";
+        String urlParameters = URLEncoder.encode("beaconId", "UTF-8") + "=" + URLEncoder.encode(beaconName, "UTF-8");
+        String response = executePost(getPlayersURL, urlParameters);
+        JSONArray playersList = new JSONArray(response);
+        myapp.showToast(playersList.length() + " players have already found this treasure", myContext);
+        myapp.showToast("The new hint is: " + newHintValue, myContext);
+        myapp.updateUserHints(newHint, newHintValue);
+        }
+    }
+}
+
+
+/**** - *****/
